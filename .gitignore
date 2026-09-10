@@ -1,0 +1,13 @@
+# Fetched intermediates (pkl/xlsx/json) — regenerated on every run
+build/
+
+# Generated site — published by Actions as an artifact, not committed
+public/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Local secrets
+.env
