@@ -1,0 +1,78 @@
+name: Build and deploy dashboard
+
+on:
+  schedule:
+    # 06:15 UTC every weekday. FRED posts most releases by ~13:30 UTC, so this picks
+    # up the previous US session/release day. Cron is UTC and GitHub may delay runs
+    # by several minutes under load.
+    - cron: "15 6 * * 1-5"
+  workflow_dispatch:        # manual "Run workflow" button
+  push:
+    branches: [main]
+    paths:
+      - "build.py"
+      - "requirements.txt"
+      - ".github/workflows/build.yml"
+
+permissions:
+  contents: write           # commit the refreshed S&P cache
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Build dashboard
+        env:
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+        run: python build.py
+
+      - name: Verify output
+        run: |
+          test -s public/index.html || { echo "index.html missing/empty"; exit 1; }
+          # guard against a silently truncated build
+          bytes=$(wc -c < public/index.html)
+          echo "index.html = $bytes bytes"
+          [ "$bytes" -gt 100000 ] || { echo "index.html suspiciously small"; exit 1; }
+          cat public/build.json
+
+      - name: Commit refreshed S&P cache
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add cache/sp500_monthly.csv
+          if git diff --staged --quiet; then
+            echo "cache unchanged"
+          else
+            git commit -m "chore: refresh S&P 500 cache [skip ci]"
+            git push
+          fi
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
