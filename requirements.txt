@@ -1,0 +1,5 @@
+# Pinned to minimum-compatible majors; CI installs the latest matching release.
+pandas>=2.2,<4
+numpy>=1.26,<3
+requests>=2.31
+openpyxl>=3.1        # reads the HLW / Lubik-Matthes .xlsx files
